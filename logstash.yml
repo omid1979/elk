@@ -1,0 +1,33 @@
+version: '3.8'  # Specify Docker Compose version for clarity
+services:
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.17.1
+    container_name: logstash
+    command: >
+      /bin/bash -c "
+        echo 'Waiting for Elasticsearch availability';
+        for i in {1..60}; do
+          if curl -s --user elastic:${ELASTIC_PASSWORD} http://elasticsearch:9200 >/dev/null 2>&1; then
+            echo 'Elasticsearch is up';
+            break;
+          fi;
+          echo 'Waiting... ($i/60)';
+          sleep 1;
+        done;
+        if [ $i -eq 60 ]; then
+          echo 'Error: Elasticsearch not available after 60 seconds';
+          exit 1;
+        fi;
+        echo 'Starting Logstash';
+        /usr/share/logstash/bin/logstash -f /usr/share/logstash/pipeline/logstash.conf
+      "
+    environment:
+      - xpack.monitoring.enabled=false
+      - ELASTIC_USER=elastic
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}  # Fallback password
+      - ELASTIC_HOSTS=http://elasticsearch:9200
+    volumes:
+      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro  # Read-only mount
+    depends_on:
+      - elasticsearch  # Assumes an Elasticsearch service exists
+
